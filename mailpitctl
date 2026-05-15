@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# mailpitctl - Manage a local Mailpit Docker container for development workflows.
+#
+# This script provides simple lifecycle management for the Mailpit container,
+# including start, stop, restart, status, log inspection, and destruction.
+
+###############################################################################
+# Configuration
+#
+# CONTAINER_NAME
+#   Name of the Docker container to manage.
+#
+# IMAGE
+#   Docker image used when creating the container.
+#
+# WEB_BIND
+#   Local interface/IP address to bind the Mailpit web UI listener to.
+#
+# WEB_PORT
+#   Local TCP port exposed for the Mailpit web UI.
+#
+# SMTP_BIND
+#   Local interface/IP address to bind the Mailpit SMTP listener to.
+#
+# SMTP_PORT
+#   Local TCP port exposed for the Mailpit SMTP listener.
+#
+# RED
+#   ANSI escape sequence used for error output.
+#
+# GREEN
+#   ANSI escape sequence used for successful operation output.
+#
+# YELLOW
+#   ANSI escape sequence used for warning output.
+#
+# BLUE
+#   ANSI escape sequence used for informational output.
+#
+# NC
+#   ANSI escape sequence used to reset terminal formatting ("No Color").
+###############################################################################
+
+CONTAINER_NAME="mailpit"
+IMAGE="axllent/mailpit:latest"
+WEB_BIND="127.0.0.1"
+WEB_PORT="8025"
+SMTP_BIND="127.0.0.1"
+SMTP_PORT="1025"
+
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+###############################################################################
+# Functions
+#
+# Utility, validation, status, and container lifecycle management functions.
+###############################################################################
+
+usage() {
+  cat << EOF
+Usage: $0 [--help] <command>
+
+Options:
+  -h, --help    Display usage information
+
+Commands:
+  start, up     Create the $CONTAINER_NAME container if needed, then start it
+  stop, down    Stop the $CONTAINER_NAME container
+  restart       Restart the $CONTAINER_NAME container
+  status        Show $CONTAINER_NAME container status
+  logs [-f|--follow]
+                Display container logs
+                -f, --follow   Follow log output live
+  destroy       Stop and remove the $CONTAINER_NAME container
+EOF
+}
+
+display_success() {
+  printf '%b%s%b\n' "$GREEN" "$1" "$NC"
+}
+
+display_warning() {
+  printf '%bWarning: %s%b\n' "$YELLOW" "$1" "$NC" >&2
+}
+
+display_error() {
+  local message="$1"
+  local hint="${2:-}"
+
+  if [[ -n "$hint" ]]; then
+    printf '%bError: %s: %s %b%s%b\n' "$RED" "$message" "$CONTAINER_NAME" "$BLUE" "$hint" "$NC" >&2
+  else
+    printf '%bError: %s: %s%b\n' "$RED" "$message" "$CONTAINER_NAME" "$NC" >&2
+  fi
+}
+
+error_occurred() {
+  display_error "failed to $1 container"
+  exit 1
+}
+
+validate_usage() {
+  if [[ "$#" -gt 1 ]]; then
+    printf '%bError: too many arguments for command: %s%b\n\n' "$RED" "$1" "$NC" >&2
+    usage
+    exit 1
+  fi
+}
+
+container_exists() {
+  docker container inspect "$CONTAINER_NAME" > /dev/null 2>&1
+}
+
+container_running() {
+  docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2> /dev/null | grep -q '^true$'
+}
+
+container_status() {
+  if ! container_exists; then
+    display_error "container does not exist" "[Try running: $0 start]"
+    return
+  fi
+
+  if container_running; then
+    display_success "Container is running"
+  else
+    printf '%bContainer is stopped%b\n' "$RED" "$NC"
+  fi
+  printf '\n'
+
+  docker ps -a \
+    --filter "name=^/${CONTAINER_NAME}$" \
+    --format "table {{.ID}}\t{{.RunningFor}}\t{{.Status}}\t{{.Names}}"
+}
+
+create_container() {
+  if container_exists; then
+    return
+  fi
+
+  printf 'Creating container: %s\n' "$CONTAINER_NAME"
+
+  docker pull "$IMAGE" || error_occurred create
+
+  docker create \
+    --name "$CONTAINER_NAME" \
+    --restart unless-stopped \
+    -p "${WEB_BIND}:${WEB_PORT}:8025" \
+    -p "${SMTP_BIND}:${SMTP_PORT}:1025" \
+    "$IMAGE" > /dev/null || error_occurred create
+
+  display_success "Created container"
+}
+
+start_container() {
+  if ! container_exists; then
+    create_container
+  fi
+
+  if container_running; then
+    display_success "Container is already running"
+    return
+  fi
+
+  docker start "$CONTAINER_NAME" > /dev/null || error_occurred start
+
+  display_success "Started container: $CONTAINER_NAME"
+  printf '\n'
+  display_success "Mailpit UI: http://localhost:${WEB_PORT}"
+  display_success "SMTP: localhost:${SMTP_PORT}"
+}
+
+stop_container() {
+  if ! container_exists; then
+    display_error "container does not exist" "[Try running: $0 start]"
+    return
+  fi
+
+  if ! container_running; then
+    display_success "Container is not running"
+    return
+  fi
+
+  docker stop "$CONTAINER_NAME" > /dev/null || error_occurred stop
+
+  display_success "Stopped container"
+}
+
+restart_container() {
+  if ! container_exists; then
+    display_error "container does not exist" "[Try running: $0 start]"
+    return
+  fi
+
+  if ! container_running; then
+    display_warning "container is stopped; starting it now..."
+  fi
+
+  docker restart "$CONTAINER_NAME" > /dev/null || error_occurred restart
+
+  display_success "Restarted container: $CONTAINER_NAME"
+}
+
+destroy_container() {
+  if ! container_exists; then
+    display_error "container does not exist" "[Try running: $0 start]"
+    return
+  fi
+
+  docker rm -f "$CONTAINER_NAME" > /dev/null || error_occurred destroy
+
+  if container_exists; then
+    error_occurred destroy
+  fi
+
+  display_success "Destroyed container"
+}
+
+logs_container() {
+  if [[ $# -gt 1 ]]; then
+    printf '%bError: too many arguments for command: logs%b\n\n' "$RED" "$NC" >&2
+    usage
+    exit 1
+  fi
+
+  if ! container_exists; then
+    display_error "container does not exist" "[Try running: $0 start]"
+    return
+  fi
+
+  case "${1:-}" in
+    "")
+      docker logs "$CONTAINER_NAME"
+      ;;
+    -f | --follow)
+      docker logs -f "$CONTAINER_NAME"
+      ;;
+    *)
+      printf '%bError: invalid logs option: %s%b\n\n' "$RED" "$1" "$NC" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+###############################################################################
+# Global Help Handling
+#
+# Detect and process help flags regardless of argument position so that:
+#
+#   ./mailpitctl --help
+#   ./mailpitctl up --help
+#   ./mailpitctl logs --help
+#
+# all display usage information and exit cleanly before command execution.
+###############################################################################
+for arg in "$@"; do
+  case "$arg" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+  esac
+done
+
+###############################################################################
+# Main Program
+#
+# Parse command-line arguments and dispatch requested container operations.
+###############################################################################
+
+case "${1:-}" in
+  start | up)
+    validate_usage "$@"
+    start_container
+    ;;
+  stop | down)
+    validate_usage "$@"
+    stop_container
+    ;;
+  restart)
+    validate_usage "$@"
+    restart_container
+    ;;
+  status)
+    validate_usage "$@"
+    container_status
+    ;;
+  logs)
+    shift || true
+    logs_container "$@"
+    ;;
+  destroy)
+    validate_usage "$@"
+    destroy_container
+    ;;
+  *)
+    printf '%bError: invalid command: %s%b\n\n' "$RED" "${1:-}" "$NC" >&2
+    usage
+    exit 1
+    ;;
+esac
