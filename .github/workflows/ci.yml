@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+
+      - name: Run yamllint
+        uses: ibiqlik/action-yamllint@v3
+
+      - name: Run markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v16
