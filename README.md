@@ -4,10 +4,10 @@ Simple local Mailpit container management tooling for development workflows.
 
 ## Services
 
-| Service        | URL / Port            |
-| -------------- | --------------------- |
-| Mailpit Web UI | http://localhost:8025 |
-| SMTP Server    | localhost:1025        |
+| Service        | URL / Port              |
+| -------------- | ----------------------- |
+| Mailpit Web UI | <http://localhost:8025> |
+| SMTP Server    | `localhost:1025`        |
 
 ## Prerequisites
 
