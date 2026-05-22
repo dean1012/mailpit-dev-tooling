@@ -301,7 +301,10 @@ case "${1:-}" in
     destroy_container
     ;;
   *)
-    printf '%bError: invalid command: %s%b\n\n' "$RED" "${1:-}" "$NC" >&2
+    if [ $# -gt 0 ]; then
+      printf '%bError: invalid command: %s%b\n\n' "$RED" "${1:-}" "$NC" >&2
+    fi
+
     usage
     exit 1
     ;;
