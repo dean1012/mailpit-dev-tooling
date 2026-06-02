@@ -9,20 +9,17 @@ set -euo pipefail
 ###############################################################################
 # Configuration
 #
+# SERVICE_NAME
+#   Name of the Docker Compose service to manage.
+#
 # CONTAINER_NAME
-#   Name of the Docker container to manage.
+#   Name of the Docker container created for the service.
 #
-# IMAGE
-#   Docker image used when creating the container.
-#
-# WEB_BIND
-#   Local interface/IP address to bind the Mailpit web UI listener to.
+# SCRIPT_DIR
+#   Absolute path to the directory containing this script and compose.yml.
 #
 # WEB_PORT
 #   Local TCP port exposed for the Mailpit web UI.
-#
-# SMTP_BIND
-#   Local interface/IP address to bind the Mailpit SMTP listener to.
 #
 # SMTP_PORT
 #   Local TCP port exposed for the Mailpit SMTP listener.
@@ -43,11 +40,10 @@ set -euo pipefail
 #   ANSI escape sequence used to reset terminal formatting ("No Color").
 ###############################################################################
 
+SERVICE_NAME="mailpit"
 CONTAINER_NAME="mailpit"
-IMAGE="axllent/mailpit:latest"
-WEB_BIND="127.0.0.1"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WEB_PORT="8025"
-SMTP_BIND="127.0.0.1"
 SMTP_PORT="1025"
 
 GREEN='\033[0;32m'
@@ -115,6 +111,11 @@ require_docker() {
     printf '%bError: unable to communicate with the Docker daemon%b\n' "$RED" "$NC" >&2
     exit 1
   fi
+
+  if ! docker compose version > /dev/null 2>&1; then
+    printf '%bError: Docker Compose is not installed%b\n' "$RED" "$NC" >&2
+    exit 1
+  fi
 }
 
 validate_usage() {
@@ -125,17 +126,34 @@ validate_usage() {
   fi
 }
 
+compose_command() {
+  docker compose --project-directory "$SCRIPT_DIR" --file "${SCRIPT_DIR}/compose.yml" "$@"
+}
+
+compose_container_exists() {
+  [[ -n "$(compose_command ps --all --quiet "$SERVICE_NAME")" ]]
+}
+
 container_exists() {
   docker container inspect "$CONTAINER_NAME" > /dev/null 2>&1
 }
 
 container_running() {
-  docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2> /dev/null | grep -q '^true$'
+  [[ -n "$(compose_command ps --status running --quiet "$SERVICE_NAME")" ]]
+}
+
+display_missing_container_error() {
+  if container_exists; then
+    display_error "container is not managed by Docker Compose" \
+      "[Remove it with: docker rm -f $CONTAINER_NAME]"
+  else
+    display_error "container does not exist" "[Try running: $0 start]"
+  fi
 }
 
 container_status() {
-  if ! container_exists; then
-    display_error "container does not exist" "[Try running: $0 start]"
+  if ! compose_container_exists; then
+    display_missing_container_error
     return 1
   fi
 
@@ -146,41 +164,21 @@ container_status() {
   fi
   printf '\n'
 
-  docker ps -a \
-    --filter "name=^/${CONTAINER_NAME}$" \
-    --format "table {{.ID}}\t{{.RunningFor}}\t{{.Status}}\t{{.Names}}"
-}
-
-create_container() {
-  if container_exists; then
-    return
-  fi
-
-  printf 'Creating container: %s\n' "$CONTAINER_NAME"
-
-  docker pull "$IMAGE" || error_occurred create
-
-  docker create \
-    --name "$CONTAINER_NAME" \
-    --restart unless-stopped \
-    -p "${WEB_BIND}:${WEB_PORT}:8025" \
-    -p "${SMTP_BIND}:${SMTP_PORT}:1025" \
-    "$IMAGE" > /dev/null || error_occurred create
-
-  display_success "Created container"
+  compose_command ps --all "$SERVICE_NAME"
 }
 
 start_container() {
-  if ! container_exists; then
-    create_container
-  fi
-
   if container_running; then
     display_success "Container is already running"
     return
   fi
 
-  docker start "$CONTAINER_NAME" > /dev/null || error_occurred start
+  if ! compose_container_exists && container_exists; then
+    display_missing_container_error
+    return 1
+  fi
+
+  compose_command up --detach "$SERVICE_NAME" || error_occurred start
 
   display_success "Started container: $CONTAINER_NAME"
   printf '\n'
@@ -189,8 +187,8 @@ start_container() {
 }
 
 stop_container() {
-  if ! container_exists; then
-    display_error "container does not exist" "[Try running: $0 start]"
+  if ! compose_container_exists; then
+    display_missing_container_error
     return 1
   fi
 
@@ -199,35 +197,36 @@ stop_container() {
     return
   fi
 
-  docker stop "$CONTAINER_NAME" > /dev/null || error_occurred stop
+  compose_command stop "$SERVICE_NAME" > /dev/null || error_occurred stop
 
   display_success "Stopped container"
 }
 
 restart_container() {
-  if ! container_exists; then
-    display_error "container does not exist" "[Try running: $0 start]"
+  if ! compose_container_exists; then
+    display_missing_container_error
     return 1
   fi
 
   if ! container_running; then
     display_warning "container is stopped; starting it now..."
+    compose_command start "$SERVICE_NAME" > /dev/null || error_occurred restart
+  else
+    compose_command restart "$SERVICE_NAME" > /dev/null || error_occurred restart
   fi
-
-  docker restart "$CONTAINER_NAME" > /dev/null || error_occurred restart
 
   display_success "Restarted container: $CONTAINER_NAME"
 }
 
 destroy_container() {
-  if ! container_exists; then
-    display_error "container does not exist" "[Try running: $0 start]"
+  if ! compose_container_exists; then
+    display_missing_container_error
     return 1
   fi
 
-  docker rm -f "$CONTAINER_NAME" > /dev/null || error_occurred destroy
+  compose_command down > /dev/null || error_occurred destroy
 
-  if container_exists; then
+  if compose_container_exists; then
     error_occurred destroy
   fi
 
@@ -253,17 +252,17 @@ logs_container() {
 
   require_docker
 
-  if ! container_exists; then
-    display_error "container does not exist" "[Try running: $0 start]"
+  if ! compose_container_exists; then
+    display_missing_container_error
     return 1
   fi
 
   case "${1:-}" in
     "")
-      docker logs "$CONTAINER_NAME"
+      compose_command logs "$SERVICE_NAME"
       ;;
     -f | --follow)
-      docker logs -f "$CONTAINER_NAME"
+      compose_command logs --follow "$SERVICE_NAME"
       ;;
   esac
 }
