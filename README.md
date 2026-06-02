@@ -39,9 +39,8 @@ Commands:
   stop, down    Stop the mailpit container
   restart       Restart the mailpit container
   status        Show mailpit container status
-  logs [-f|--follow]
-                Display container logs
-                -f, --follow   Follow log output live
+  logs [options]
+                Display container logs, passing options to docker compose logs
   destroy       Stop and remove the mailpit container
 ```
 
@@ -101,6 +100,12 @@ Follow container logs live:
 ./mailpitctl logs -f
 ```
 
+Show only the last 20 log lines:
+
+```bash
+./mailpitctl logs --tail 20
+```
+
 Destroy the Mailpit container:
 
 ```bash
@@ -154,6 +159,19 @@ Use alternate host ports with Docker Compose:
 
 ```bash
 MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 docker compose up -d
+```
+
+Update the Mailpit container using Docker Compose:
+
+```bash
+docker compose pull mailpit
+docker compose up -d --force-recreate --wait mailpit
+```
+
+Follow Mailpit logs using Docker Compose:
+
+```bash
+docker compose logs --follow mailpit
 ```
 
 ## Image Update Policy
