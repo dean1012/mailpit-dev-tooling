@@ -59,6 +59,12 @@ Use alternate local host ports when the defaults are already in use:
 MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 ./mailpitctl start
 ```
 
+Use a longer healthcheck wait timeout on slower machines:
+
+```bash
+MAILPIT_WAIT_TIMEOUT=60 ./mailpitctl start
+```
+
 Expose Mailpit on a different host interface only when that is intentional:
 
 ```bash

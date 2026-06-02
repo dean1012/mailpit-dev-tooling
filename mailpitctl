@@ -47,7 +47,8 @@ MAILPIT_WEB_BIND="${MAILPIT_WEB_BIND:-127.0.0.1}"
 MAILPIT_WEB_PORT="${MAILPIT_WEB_PORT:-8025}"
 MAILPIT_SMTP_BIND="${MAILPIT_SMTP_BIND:-127.0.0.1}"
 MAILPIT_SMTP_PORT="${MAILPIT_SMTP_PORT:-1025}"
-export MAILPIT_WEB_BIND MAILPIT_WEB_PORT MAILPIT_SMTP_BIND MAILPIT_SMTP_PORT
+MAILPIT_WAIT_TIMEOUT="${MAILPIT_WAIT_TIMEOUT:-30}"
+export MAILPIT_WEB_BIND MAILPIT_WEB_PORT MAILPIT_SMTP_BIND MAILPIT_SMTP_PORT MAILPIT_WAIT_TIMEOUT
 
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -146,6 +147,11 @@ container_running() {
   [[ -n "$(compose_command ps --status running --quiet "$SERVICE_NAME")" ]]
 }
 
+wait_for_container() {
+  compose_command up --detach --wait --wait-timeout "$MAILPIT_WAIT_TIMEOUT" "$SERVICE_NAME" \
+    || error_occurred wait
+}
+
 display_missing_container_error() {
   if container_exists; then
     display_error "container is not managed by Docker Compose" \
@@ -182,7 +188,7 @@ start_container() {
     return 1
   fi
 
-  compose_command up --detach "$SERVICE_NAME" || error_occurred start
+  wait_for_container
 
   display_success "Started container: $CONTAINER_NAME"
   printf '\n'
@@ -197,7 +203,8 @@ update_container() {
   fi
 
   compose_command pull "$SERVICE_NAME" || error_occurred update
-  compose_command up --detach --force-recreate "$SERVICE_NAME" || error_occurred update
+  compose_command up --detach --force-recreate --wait --wait-timeout "$MAILPIT_WAIT_TIMEOUT" "$SERVICE_NAME" \
+    || error_occurred update
 
   display_success "Updated container: $CONTAINER_NAME"
 }
@@ -230,6 +237,7 @@ restart_container() {
   else
     compose_command restart "$SERVICE_NAME" > /dev/null || error_occurred restart
   fi
+  wait_for_container
 
   display_success "Restarted container: $CONTAINER_NAME"
 }
