@@ -105,6 +105,18 @@ error_occurred() {
   exit 1
 }
 
+require_docker() {
+  if ! command -v docker > /dev/null 2>&1; then
+    printf '%bError: Docker CLI is not installed%b\n' "$RED" "$NC" >&2
+    exit 1
+  fi
+
+  if ! docker info > /dev/null 2>&1; then
+    printf '%bError: unable to communicate with the Docker daemon%b\n' "$RED" "$NC" >&2
+    exit 1
+  fi
+}
+
 validate_usage() {
   if [[ "$#" -gt 1 ]]; then
     printf '%bError: too many arguments for command: %s%b\n\n' "$RED" "$1" "$NC" >&2
@@ -124,7 +136,7 @@ container_running() {
 container_status() {
   if ! container_exists; then
     display_error "container does not exist" "[Try running: $0 start]"
-    return
+    return 1
   fi
 
   if container_running; then
@@ -179,7 +191,7 @@ start_container() {
 stop_container() {
   if ! container_exists; then
     display_error "container does not exist" "[Try running: $0 start]"
-    return
+    return 1
   fi
 
   if ! container_running; then
@@ -195,7 +207,7 @@ stop_container() {
 restart_container() {
   if ! container_exists; then
     display_error "container does not exist" "[Try running: $0 start]"
-    return
+    return 1
   fi
 
   if ! container_running; then
@@ -210,7 +222,7 @@ restart_container() {
 destroy_container() {
   if ! container_exists; then
     display_error "container does not exist" "[Try running: $0 start]"
-    return
+    return 1
   fi
 
   docker rm -f "$CONTAINER_NAME" > /dev/null || error_occurred destroy
@@ -229,9 +241,21 @@ logs_container() {
     exit 1
   fi
 
+  case "${1:-}" in
+    "" | -f | --follow)
+      ;;
+    *)
+      printf '%bError: invalid logs option: %s%b\n\n' "$RED" "$1" "$NC" >&2
+      usage
+      exit 1
+      ;;
+  esac
+
+  require_docker
+
   if ! container_exists; then
     display_error "container does not exist" "[Try running: $0 start]"
-    return
+    return 1
   fi
 
   case "${1:-}" in
@@ -240,11 +264,6 @@ logs_container() {
       ;;
     -f | --follow)
       docker logs -f "$CONTAINER_NAME"
-      ;;
-    *)
-      printf '%bError: invalid logs option: %s%b\n\n' "$RED" "$1" "$NC" >&2
-      usage
-      exit 1
       ;;
   esac
 }
@@ -278,18 +297,22 @@ done
 case "${1:-}" in
   start | up)
     validate_usage "$@"
+    require_docker
     start_container
     ;;
   stop | down)
     validate_usage "$@"
+    require_docker
     stop_container
     ;;
   restart)
     validate_usage "$@"
+    require_docker
     restart_container
     ;;
   status)
     validate_usage "$@"
+    require_docker
     container_status
     ;;
   logs)
@@ -298,6 +321,7 @@ case "${1:-}" in
     ;;
   destroy)
     validate_usage "$@"
+    require_docker
     destroy_container
     ;;
   *)
