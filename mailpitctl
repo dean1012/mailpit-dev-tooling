@@ -67,6 +67,7 @@ Options:
 
 Commands:
   start, up     Create the $CONTAINER_NAME container if needed, then start it
+  update        Pull the configured image, then recreate and start the $CONTAINER_NAME container
   stop, down    Stop the $CONTAINER_NAME container
   restart       Restart the $CONTAINER_NAME container
   status        Show $CONTAINER_NAME container status
@@ -186,6 +187,18 @@ start_container() {
   display_success "SMTP: localhost:${SMTP_PORT}"
 }
 
+update_container() {
+  if ! compose_container_exists && container_exists; then
+    display_missing_container_error
+    return 1
+  fi
+
+  compose_command pull "$SERVICE_NAME" || error_occurred update
+  compose_command up --detach --force-recreate "$SERVICE_NAME" || error_occurred update
+
+  display_success "Updated container: $CONTAINER_NAME"
+}
+
 stop_container() {
   if ! compose_container_exists; then
     display_missing_container_error
@@ -298,6 +311,11 @@ case "${1:-}" in
     validate_usage "$@"
     require_docker
     start_container
+    ;;
+  update)
+    validate_usage "$@"
+    require_docker
+    update_container
     ;;
   stop | down)
     validate_usage "$@"
