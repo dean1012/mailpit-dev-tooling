@@ -4,5 +4,5 @@ services:
     container_name: mailpit
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8025:8025"  # Web UI
-      - "127.0.0.1:1025:1025"  # SMTP
+      - "${MAILPIT_WEB_BIND:-127.0.0.1}:${MAILPIT_WEB_PORT:-8025}:8025"  # Web UI
+      - "${MAILPIT_SMTP_BIND:-127.0.0.1}:${MAILPIT_SMTP_PORT:-1025}:1025"  # SMTP
