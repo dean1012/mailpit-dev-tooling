@@ -1,188 +1,110 @@
 # Mailpit Development Tooling
 
-Simple local Mailpit container management tooling for development workflows.
+[![CI](https://github.com/dean1012/mailpit-dev-tooling/actions/workflows/ci.yml/badge.svg)](https://github.com/dean1012/mailpit-dev-tooling/actions/workflows/ci.yml)
+[![Unit Tests](https://github.com/dean1012/mailpit-dev-tooling/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/dean1012/mailpit-dev-tooling/actions/workflows/unit-tests.yml)
+[![codecov](https://codecov.io/gh/dean1012/mailpit-dev-tooling/graph/badge.svg)](https://codecov.io/gh/dean1012/mailpit-dev-tooling)
 
-## Services
+A tiny local-development wrapper for running
+[Mailpit](https://mailpit.axllent.org/) with Docker Compose.
 
-| Service        | URL / Port              |
-| -------------- | ----------------------- |
-| Mailpit Web UI | <http://localhost:8025> |
-| SMTP Server    | `localhost:1025`        |
+The repository provides two ways to manage the same service:
 
-## Prerequisites
+- `mailpitctl`, a small shell script for common lifecycle commands.
+- `compose.yml`, for teams or developers who prefer direct Docker Compose usage.
 
-- Docker or Docker Desktop with Docker Compose
-- Bash-compatible shell
-- Local development application capable of sending SMTP email
+## Features
+
+- Starts a local Mailpit SMTP server and web UI.
+- Binds to `127.0.0.1` by default so the service is local-only.
+- Supports local bind address, port, and health-wait configuration.
+- Uses Docker Compose health checks when starting, updating, or restarting.
+- Pins the Mailpit image by version and digest for reproducibility.
+- Runs the container with reduced privileges for safer local defaults.
+
+## Requirements
+
+- Bash
+- Docker
+- Docker Compose plugin (`docker compose`)
 
 ## Installation
 
-Clone the repository and make the management utility executable:
+Clone the repository and run the script from the project directory:
 
 ```bash
 git clone https://github.com/dean1012/mailpit-dev-tooling.git
 cd mailpit-dev-tooling
-chmod +x mailpitctl
-```
-
-## Usage
-
-```text
-Usage: ./mailpitctl [--help] <command>
-
-Options:
-  -h, --help    Display usage information
-
-Commands:
-  start, up     Create the mailpit container if needed, then start it
-  update        Pull the configured image, then recreate and start the mailpit container
-  stop, down    Stop the mailpit container
-  restart       Restart the mailpit container
-  status        Show mailpit container status
-  logs [options]
-                Display container logs, passing options to docker compose logs
-  destroy       Stop and remove the mailpit container
-```
-
-## Usage Examples
-
-Start the Mailpit container:
-
-```bash
 ./mailpitctl start
 ```
 
-Use alternate local host ports when the defaults are already in use:
+Mailpit will be available at <http://127.0.0.1:8025>, and SMTP will listen on
+`127.0.0.1:1025`.
+
+## Configuration
+
+No configuration file is required. The script and Compose file use sensible
+defaults when `config.env` is absent.
+
+To customize your local ports or bind addresses:
 
 ```bash
-MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 ./mailpitctl start
+cp config.env.example config.env
+$EDITOR config.env
 ```
 
-Use a longer healthcheck wait timeout on slower machines:
+The example file is a working configuration and documents each supported value.
+Keep `127.0.0.1` for local-only access. Use a wider bind address such as
+`0.0.0.0` only when another machine must reach this development environment.
+
+## Usage
 
 ```bash
-MAILPIT_WAIT_TIMEOUT=60 ./mailpitctl start
+./mailpitctl start      # Create and start Mailpit
+./mailpitctl status     # Show container and health status
+./mailpitctl logs       # Display logs
+./mailpitctl stop       # Stop the container
+./mailpitctl restart    # Restart and wait for health
+./mailpitctl update     # Pull, recreate, and start the pinned image
+./mailpitctl destroy    # Stop and remove the container
 ```
 
-Expose Mailpit on a different host interface only when that is intentional:
+`logs` forwards options to Docker Compose:
 
 ```bash
-MAILPIT_WEB_BIND=0.0.0.0 MAILPIT_SMTP_BIND=0.0.0.0 ./mailpitctl start
-```
-
-Update the Mailpit container to the configured image:
-
-```bash
-./mailpitctl update
-```
-
-Stop the Mailpit container:
-
-```bash
-./mailpitctl stop
-```
-
-Restart the Mailpit container:
-
-```bash
-./mailpitctl restart
-```
-
-View container status:
-
-```bash
-./mailpitctl status
-```
-
-Follow container logs live:
-
-```bash
-./mailpitctl logs -f
-```
-
-Show only the last 20 log lines:
-
-```bash
-./mailpitctl logs --tail 20
-```
-
-Destroy the Mailpit container:
-
-```bash
-./mailpitctl destroy
-```
-
-## Express Backend Configuration
-
-Configure your local Express backend to send mail through Mailpit using the
-following SMTP settings:
-
-```text
-SMTP_HOST=localhost
-SMTP_PORT=1025
-SMTP_SECURE=false
-```
-
-Example `nodemailer` configuration:
-
-```javascript
-import nodemailer from "nodemailer";
-
-const transporter = nodemailer.createTransport({
-  host: "localhost",
-  port: 1025,
-  secure: false,
-});
-```
-
-Captured email can be viewed at:
-
-```text
-http://localhost:8025
+./mailpitctl logs --tail 50 --follow
 ```
 
 ## Docker Compose
 
-A `compose.yml` file is included for users who prefer direct Docker Compose
-workflows instead of the provided management utility.
-
-By default, Mailpit binds to `127.0.0.1` on web port `8025` and SMTP port
-`1025`. The loopback bind keeps the local development service off the LAN.
-
-Start the Mailpit container using Docker Compose:
+You can also use Docker Compose directly. Defaults work without any extra flags:
 
 ```bash
-docker compose up -d --wait mailpit
+docker compose up --detach --wait mailpit
+docker compose ps --all mailpit
+docker compose logs mailpit
+docker compose down
 ```
 
-Use alternate host ports with Docker Compose:
+If you created `config.env`, pass it to Compose so direct commands use the same
+local settings as `mailpitctl`:
 
 ```bash
-MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 docker compose up -d --wait mailpit
+docker compose --env-file config.env up --detach --wait mailpit
 ```
 
-Update the Mailpit container using Docker Compose:
+The script automatically passes `config.env` to Compose when the file exists.
 
-```bash
-docker compose pull mailpit
-docker compose up -d --force-recreate --wait mailpit
-```
+## Security Notes
 
-Follow Mailpit logs using Docker Compose:
+This project is designed for local development, not production hosting. The
+default loopback bind keeps the web UI and SMTP listener off the LAN. The
+container also runs as a non-root user with a read-only root filesystem, dropped
+Linux capabilities, `no-new-privileges`, and a constrained writable `/tmp`.
 
-```bash
-docker compose logs --follow mailpit
-```
+## Contributing
 
-## Image Update Policy
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for development and validation notes.
 
-The Compose file pins Mailpit to a reviewed version tag and immutable
-multi-platform image digest. Running `./mailpitctl update` pulls that exact
-image, then recreates and starts the container.
+## License
 
-To upgrade Mailpit, update both the version tag and digest in `compose.yml`,
-review the upstream release notes, then run:
-
-```bash
-./mailpitctl update
-```
+This project is licensed under the terms in [LICENSE](LICENSE).

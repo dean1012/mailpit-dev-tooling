@@ -1,16 +1,23 @@
 services:
   mailpit:
+    # Pin both the Mailpit version and digest for reproducible local tooling.
     image: axllent/mailpit:v1.30.1@sha256:3bd7c2f2696deb35a4780d152b404dceec99cb041b942c0877b3b22384714f85
     container_name: mailpit
     restart: unless-stopped
+
+    # Mailpit does not need elevated container privileges for local development.
     user: "65532:65532"
     read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+    # Mailpit needs temporary writable storage even when the root filesystem is
+    # read-only. noexec/nosuid limit what can happen inside that scratch space.
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
+
     ports:
       - "${MAILPIT_WEB_BIND:-127.0.0.1}:${MAILPIT_WEB_PORT:-8025}:8025"  # Web UI
       - "${MAILPIT_SMTP_BIND:-127.0.0.1}:${MAILPIT_SMTP_PORT:-1025}:1025"  # SMTP
