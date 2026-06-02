@@ -75,9 +75,8 @@ Commands:
   stop, down    Stop the $CONTAINER_NAME container
   restart       Restart the $CONTAINER_NAME container
   status        Show $CONTAINER_NAME container status
-  logs [-f|--follow]
-                Display container logs
-                -f, --follow   Follow log output live
+  logs [options]
+                Display container logs, passing options to docker compose logs
   destroy       Stop and remove the $CONTAINER_NAME container
 EOF
 }
@@ -258,22 +257,6 @@ destroy_container() {
 }
 
 logs_container() {
-  if [[ $# -gt 1 ]]; then
-    printf '%bError: too many arguments for command: logs%b\n\n' "$RED" "$NC" >&2
-    usage
-    exit 1
-  fi
-
-  case "${1:-}" in
-    "" | -f | --follow)
-      ;;
-    *)
-      printf '%bError: invalid logs option: %s%b\n\n' "$RED" "$1" "$NC" >&2
-      usage
-      exit 1
-      ;;
-  esac
-
   require_docker
 
   if ! compose_container_exists; then
@@ -281,14 +264,7 @@ logs_container() {
     return 1
   fi
 
-  case "${1:-}" in
-    "")
-      compose_command logs "$SERVICE_NAME"
-      ;;
-    -f | --follow)
-      compose_command logs --follow "$SERVICE_NAME"
-      ;;
-  esac
+  compose_command logs "$@" "$SERVICE_NAME" || error_occurred logs
 }
 
 ###############################################################################
