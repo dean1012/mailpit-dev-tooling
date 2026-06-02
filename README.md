@@ -53,6 +53,18 @@ Start the Mailpit container:
 ./mailpitctl start
 ```
 
+Use alternate local host ports when the defaults are already in use:
+
+```bash
+MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 ./mailpitctl start
+```
+
+Expose Mailpit on a different host interface only when that is intentional:
+
+```bash
+MAILPIT_WEB_BIND=0.0.0.0 MAILPIT_SMTP_BIND=0.0.0.0 ./mailpitctl start
+```
+
 Update the Mailpit container to the configured image:
 
 ```bash
@@ -123,10 +135,19 @@ http://localhost:8025
 A `compose.yml` file is included for users who prefer direct Docker Compose
 workflows instead of the provided management utility.
 
+By default, Mailpit binds to `127.0.0.1` on web port `8025` and SMTP port
+`1025`. The loopback bind keeps the local development service off the LAN.
+
 Start the Mailpit container using Docker Compose:
 
 ```bash
 docker compose up -d
+```
+
+Use alternate host ports with Docker Compose:
+
+```bash
+MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 docker compose up -d
 ```
 
 ## Image Update Policy
