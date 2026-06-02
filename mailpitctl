@@ -18,11 +18,20 @@ set -euo pipefail
 # SCRIPT_DIR
 #   Absolute path to the directory containing this script and compose.yml.
 #
-# WEB_PORT
+# MAILPIT_WEB_BIND
+#   Local interface/IP address to bind the Mailpit web UI listener to.
+#
+# MAILPIT_WEB_PORT
 #   Local TCP port exposed for the Mailpit web UI.
 #
-# SMTP_PORT
+# MAILPIT_SMTP_BIND
+#   Local interface/IP address to bind the Mailpit SMTP listener to.
+#
+# MAILPIT_SMTP_PORT
 #   Local TCP port exposed for the Mailpit SMTP listener.
+#
+# MAILPIT_WAIT_TIMEOUT
+#   Maximum number of seconds to wait for Mailpit to become healthy.
 #
 # RED
 #   ANSI escape sequence used for error output.
@@ -146,6 +155,10 @@ container_running() {
   [[ -n "$(compose_command ps --status running --quiet "$SERVICE_NAME")" ]]
 }
 
+container_healthy() {
+  compose_command ps --format json "$SERVICE_NAME" | grep -q '"Health":"healthy"'
+}
+
 wait_for_container() {
   compose_command up --detach --wait --wait-timeout "$MAILPIT_WAIT_TIMEOUT" "$SERVICE_NAME" \
     || error_occurred wait
@@ -168,6 +181,11 @@ container_status() {
 
   if container_running; then
     display_success "Container is running"
+    if container_healthy; then
+      display_success "Container is healthy"
+    else
+      display_warning "container is running but not healthy"
+    fi
   else
     printf '%bContainer is stopped%b\n' "$RED" "$NC"
   fi
@@ -178,7 +196,13 @@ container_status() {
 
 start_container() {
   if container_running; then
-    display_success "Container is already running"
+    if container_healthy; then
+      display_success "Container is already running"
+    else
+      display_warning "container is already running but not healthy; waiting for health..."
+      wait_for_container
+      display_success "Container is running and healthy"
+    fi
     return
   fi
 
