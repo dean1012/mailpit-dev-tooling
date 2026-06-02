@@ -11,7 +11,7 @@ Simple local Mailpit container management tooling for development workflows.
 
 ## Prerequisites
 
-- Docker or Docker Desktop
+- Docker or Docker Desktop with Docker Compose
 - Bash-compatible shell
 - Local development application capable of sending SMTP email
 
@@ -35,6 +35,7 @@ Options:
 
 Commands:
   start, up     Create the mailpit container if needed, then start it
+  update        Pull the configured image, then recreate and start the mailpit container
   stop, down    Stop the mailpit container
   restart       Restart the mailpit container
   status        Show mailpit container status
@@ -50,6 +51,12 @@ Start the Mailpit container:
 
 ```bash
 ./mailpitctl start
+```
+
+Update the Mailpit container to the configured image:
+
+```bash
+./mailpitctl update
 ```
 
 Stop the Mailpit container:
@@ -120,4 +127,17 @@ Start the Mailpit container using Docker Compose:
 
 ```bash
 docker compose up -d
+```
+
+## Image Update Policy
+
+The Compose file pins Mailpit to a reviewed version tag and immutable
+multi-platform image digest. Running `./mailpitctl update` pulls that exact
+image, then recreates and starts the container.
+
+To upgrade Mailpit, update both the version tag and digest in `compose.yml`,
+review the upstream release notes, then run:
+
+```bash
+./mailpitctl update
 ```
