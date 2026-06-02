@@ -152,13 +152,13 @@ By default, Mailpit binds to `127.0.0.1` on web port `8025` and SMTP port
 Start the Mailpit container using Docker Compose:
 
 ```bash
-docker compose up -d
+docker compose up -d --wait mailpit
 ```
 
 Use alternate host ports with Docker Compose:
 
 ```bash
-MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 docker compose up -d
+MAILPIT_WEB_PORT=18025 MAILPIT_SMTP_PORT=11025 docker compose up -d --wait mailpit
 ```
 
 Update the Mailpit container using Docker Compose:
