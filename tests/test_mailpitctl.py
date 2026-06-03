@@ -32,6 +32,7 @@ class DockerCall(TypedDict):
     command: str
     args: list[str]
     compose_options: list[str]
+    environment: dict[str, str]
 
 
 FAKE_DOCKER = r"""#!/usr/bin/env python3
@@ -54,11 +55,24 @@ def save_state(state):
 
 
 def log_call(command, args, compose_options=None):
+    environment = {
+        key: os.environ[key]
+        for key in (
+            "MAILPIT_IMAGE",
+            "MAILPIT_WEB_BIND",
+            "MAILPIT_WEB_PORT",
+            "MAILPIT_SMTP_BIND",
+            "MAILPIT_SMTP_PORT",
+            "MAILPIT_WAIT_TIMEOUT",
+        )
+        if key in os.environ
+    }
     with open(log_path, "a", encoding="utf-8") as handle:
         handle.write(json.dumps({
             "command": command,
             "args": args,
             "compose_options": compose_options or [],
+            "environment": environment,
         }) + "\n")
 
 
@@ -311,6 +325,15 @@ class MailpitctlTestCase(unittest.TestCase):
         self.assertIn("Usage:", result.stdout)
         self.assertEqual(self.docker_calls(), [])
 
+    def test_help_ignores_invalid_config_env(self) -> None:
+        (self.project / "config.env").write_text("UNKNOWN=value\n", encoding="utf-8")
+
+        result = self.run_ctl("--help")
+
+        self.assert_success(result)
+        self.assertIn("Usage:", result.stdout)
+        self.assertEqual(self.docker_calls(), [])
+
     def test_invalid_command_prints_usage(self) -> None:
         result = self.run_ctl("bogus")
 
@@ -419,6 +442,7 @@ class MailpitctlTestCase(unittest.TestCase):
                 MAILPIT_SMTP_BIND=127.0.0.1
                 MAILPIT_SMTP_PORT=11025
                 MAILPIT_WAIT_TIMEOUT=7
+                MAILPIT_IMAGE=example/mailpit:test
                 """
             ).strip()
             + "\n",
@@ -434,6 +458,38 @@ class MailpitctlTestCase(unittest.TestCase):
         self.assertIn("--env-file", up_call["compose_options"])
         self.assertIn(str(self.project / "config.env"), up_call["compose_options"])
         self.assertEqual(up_call["args"][up_call["args"].index("--wait-timeout") + 1], "7")
+        self.assertEqual(up_call["environment"]["MAILPIT_IMAGE"], "example/mailpit:test")
+
+    def test_config_env_rejects_unknown_key(self) -> None:
+        (self.project / "config.env").write_text("PATH=/tmp\n", encoding="utf-8")
+
+        result = self.run_ctl("start")
+
+        self.assert_failure(result)
+        self.assertIn("unsupported key: PATH", result.stderr)
+        self.assertEqual(self.docker_calls(), [])
+
+    def test_config_env_rejects_malformed_line(self) -> None:
+        (self.project / "config.env").write_text("MAILPIT_WEB_PORT 18025\n", encoding="utf-8")
+
+        result = self.run_ctl("start")
+
+        self.assert_failure(result)
+        self.assertIn("expected KEY=VALUE", result.stderr)
+        self.assertEqual(self.docker_calls(), [])
+
+    def test_config_env_assigns_values_without_shell_evaluation(self) -> None:
+        sentinel = self.workdir / "config-was-executed"
+        (self.project / "config.env").write_text(
+            f"MAILPIT_WEB_PORT=$(touch {sentinel})\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_ctl("start")
+
+        self.assert_success(result)
+        self.assertFalse(sentinel.exists())
+        self.assertIn(f"http://127.0.0.1:$(touch {sentinel})", result.stdout)
 
     def test_environment_overrides_defaults_without_config_file(self) -> None:
         result = self.run_ctl(
@@ -495,6 +551,23 @@ class MailpitctlTestCase(unittest.TestCase):
         self.assertIn("compose pull", commands)
         self.assertIn("compose up", commands)
         self.assertIn("Updated container: mailpit", result.stdout)
+
+    def test_update_uses_configured_mailpit_image(self) -> None:
+        self.write_state(compose_exists=True, health="healthy", running=True)
+        (self.project / "config.env").write_text(
+            "MAILPIT_IMAGE=example/mailpit:test\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_ctl("update")
+
+        self.assert_success(result)
+        image_values = [
+            call["environment"]["MAILPIT_IMAGE"]
+            for call in self.docker_calls()
+            if call["command"] in {"compose pull", "compose up"}
+        ]
+        self.assertEqual(image_values, ["example/mailpit:test", "example/mailpit:test"])
 
     def test_update_rejects_legacy_container_conflict(self) -> None:
         self.write_state(legacy_exists=True)
