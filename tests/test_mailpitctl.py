@@ -18,6 +18,7 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from textwrap import dedent
+from typing import TypedDict, cast
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,12 @@ SCRIPT_SOURCE = REPO_ROOT / "mailpitctl"
 COVERAGE_TRACE = REPO_ROOT / ".coverage.mailpitctl.lines"
 COVERAGE_XML = REPO_ROOT / "coverage.xml"
 MINIMUM_LINE_COVERAGE = 90.0
+
+
+class DockerCall(TypedDict):
+    command: str
+    args: list[str]
+    compose_options: list[str]
 
 
 FAKE_DOCKER = r"""#!/usr/bin/env python3
@@ -257,11 +264,11 @@ class MailpitctlTestCase(unittest.TestCase):
     def read_state(self) -> dict[str, object]:
         return json.loads(self.state_path.read_text(encoding="utf-8"))
 
-    def docker_calls(self) -> list[dict[str, object]]:
+    def docker_calls(self) -> list[DockerCall]:
         if not self.log_path.exists():
             return []
         return [
-            json.loads(line)
+            cast(DockerCall, json.loads(line))
             for line in self.log_path.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
@@ -321,7 +328,10 @@ class MailpitctlTestCase(unittest.TestCase):
     def test_requires_docker_cli(self) -> None:
         bash_only = self.workdir / "bash-only"
         bash_only.mkdir()
-        os.symlink(shutil.which("bash"), bash_only / "bash")
+        bash_path = shutil.which("bash")
+        if bash_path is None:
+            raise AssertionError("bash is required to run mailpitctl tests")
+        os.symlink(bash_path, bash_only / "bash")
 
         result = self.run_ctl("status", path=str(bash_only))
 
@@ -687,8 +697,9 @@ class MailpitctlTestCase(unittest.TestCase):
                 "branches-valid": "0",
             },
         )
-        ET.SubElement(coverage, "sources").append(ET.Element("source"))
-        coverage.find("sources/source").text = str(REPO_ROOT)
+        sources = ET.SubElement(coverage, "sources")
+        source = ET.SubElement(sources, "source")
+        source.text = str(REPO_ROOT)
 
         packages = ET.SubElement(coverage, "packages")
         package = ET.SubElement(
