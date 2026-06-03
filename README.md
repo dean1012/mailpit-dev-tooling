@@ -49,7 +49,7 @@ To customize your local ports or bind addresses:
 
 ```bash
 cp config.env.example config.env
-$EDITOR config.env
+vim config.env
 ```
 
 The example file is a working configuration and documents each supported value.
@@ -73,6 +73,21 @@ Keep `127.0.0.1` for local-only access. Use a wider bind address such as
 ```bash
 ./mailpitctl logs --tail 50 --follow
 ```
+
+## Updating Mailpit
+
+The `update` command pulls and recreates the container using the image pinned in
+`compose.yml`. It does not choose a newer Mailpit version automatically.
+
+To upgrade Mailpit, update the image tag and digest in `compose.yml`, review the
+upstream release notes, then run:
+
+```bash
+./mailpitctl update
+```
+
+The command keeps your local `config.env` settings, recreates the container, and
+waits for the configured health check before returning.
 
 ## Docker Compose
 
@@ -103,8 +118,8 @@ Linux capabilities, `no-new-privileges`, and a constrained writable `/tmp`.
 
 ## Contributing
 
-See [CONTRIBUTORS.md](CONTRIBUTORS.md) for development and validation notes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and validation notes.
 
 ## License
 
-This project is licensed under the terms in [LICENSE](LICENSE).
+MIT
