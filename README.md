@@ -45,7 +45,7 @@ Mailpit will be available at <http://127.0.0.1:8025>, and SMTP will listen on
 No configuration file is required. The script and Compose file use sensible
 defaults when `config.env` is absent.
 
-To customize your local ports or bind addresses:
+To customize your local image, ports, or bind addresses:
 
 ```bash
 cp config.env.example config.env
@@ -53,8 +53,9 @@ vim config.env
 ```
 
 The example file is a working configuration and documents each supported value.
-Keep `127.0.0.1` for local-only access. Use a wider bind address such as
-`0.0.0.0` only when another machine must reach this development environment.
+Keep the image digest with the version tag for reproducible local tooling. Keep
+`127.0.0.1` for local-only access. Use a wider bind address such as `0.0.0.0`
+only when another machine must reach this development environment.
 
 ## Usage
 
@@ -76,11 +77,11 @@ Keep `127.0.0.1` for local-only access. Use a wider bind address such as
 
 ## Updating Mailpit
 
-The `update` command pulls and recreates the container using the image pinned in
-`compose.yml`. It does not choose a newer Mailpit version automatically.
+The `update` command pulls and recreates the container using `MAILPIT_IMAGE`.
+It does not choose a newer Mailpit version automatically.
 
-To upgrade Mailpit, update the image tag and digest in `compose.yml`, review the
-upstream release notes, then run:
+To upgrade Mailpit, copy `config.env.example` to `config.env` if needed, update
+the `MAILPIT_IMAGE` tag and digest, review the upstream release notes, then run:
 
 ```bash
 ./mailpitctl update

@@ -1,7 +1,8 @@
 services:
   mailpit:
-    # Pin both the Mailpit version and digest for reproducible local tooling.
-    image: axllent/mailpit:v1.30.1@sha256:3bd7c2f2696deb35a4780d152b404dceec99cb041b942c0877b3b22384714f85
+    # Pin both the Mailpit version and digest by default for reproducible local
+    # tooling, while allowing config.env to opt into a reviewed update.
+    image: "${MAILPIT_IMAGE:-axllent/mailpit:v1.30.1@sha256:3bd7c2f2696deb35a4780d152b404dceec99cb041b942c0877b3b22384714f85}"  # yamllint disable-line rule:line-length
     container_name: mailpit
     restart: unless-stopped
 
