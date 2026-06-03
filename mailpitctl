@@ -1,57 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# mailpitctl - Manage a local Mailpit Docker container for development workflows.
-#
-# This script provides simple lifecycle management for the Mailpit container,
-# including start, stop, restart, status, log inspection, and destruction.
-
-###############################################################################
-# Configuration
-#
-# SERVICE_NAME
-#   Name of the Docker Compose service to manage.
-#
-# CONTAINER_NAME
-#   Name of the Docker container created for the service.
-#
-# SCRIPT_DIR
-#   Absolute path to the directory containing this script and compose.yml.
-#
-# MAILPIT_WEB_BIND
-#   Local interface/IP address to bind the Mailpit web UI listener to.
-#
-# MAILPIT_WEB_PORT
-#   Local TCP port exposed for the Mailpit web UI.
-#
-# MAILPIT_SMTP_BIND
-#   Local interface/IP address to bind the Mailpit SMTP listener to.
-#
-# MAILPIT_SMTP_PORT
-#   Local TCP port exposed for the Mailpit SMTP listener.
-#
-# MAILPIT_WAIT_TIMEOUT
-#   Maximum number of seconds to wait for Mailpit to become healthy.
-#
-# RED
-#   ANSI escape sequence used for error output.
-#
-# GREEN
-#   ANSI escape sequence used for successful operation output.
-#
-# YELLOW
-#   ANSI escape sequence used for warning output.
-#
-# BLUE
-#   ANSI escape sequence used for informational output.
-#
-# NC
-#   ANSI escape sequence used to reset terminal formatting ("No Color").
-###############################################################################
+# mailpitctl - Manage a local Mailpit Docker Compose service.
 
 SERVICE_NAME="mailpit"
 CONTAINER_NAME="mailpit"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config.env"
+
+# Keep local overrides optional. The defaults below match compose.yml, so a fresh
+# clone works without any setup, while config.env can customize local ports.
+if [[ -f "$CONFIG_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$CONFIG_FILE"
+  set +a
+fi
+
 MAILPIT_WEB_BIND="${MAILPIT_WEB_BIND:-127.0.0.1}"
 MAILPIT_WEB_PORT="${MAILPIT_WEB_PORT:-8025}"
 MAILPIT_SMTP_BIND="${MAILPIT_SMTP_BIND:-127.0.0.1}"
@@ -140,7 +105,16 @@ validate_usage() {
 }
 
 compose_command() {
-  docker compose --project-directory "$SCRIPT_DIR" --file "${SCRIPT_DIR}/compose.yml" "$@"
+  local compose_args=(
+    --project-directory "$SCRIPT_DIR"
+    --file "${SCRIPT_DIR}/compose.yml"
+  )
+
+  if [[ -f "$CONFIG_FILE" ]]; then
+    compose_args+=(--env-file "$CONFIG_FILE")
+  fi
+
+  docker compose "${compose_args[@]}" "$@"
 }
 
 compose_container_exists() {
@@ -156,6 +130,8 @@ container_running() {
 }
 
 container_healthy() {
+  # Docker Compose emits one JSON object per service; Mailpit's healthcheck is
+  # the source of truth for whether the local SMTP/UI endpoints are ready.
   compose_command ps --format json "$SERVICE_NAME" | grep -q '"Health":"healthy"'
 }
 
@@ -166,6 +142,8 @@ wait_for_container() {
 
 display_missing_container_error() {
   if container_exists; then
+    # A fixed container name is intentional, but a hand-created container with
+    # that name cannot be managed safely by this Compose project.
     display_error "container is not managed by Docker Compose" \
       "[Remove it with: docker rm -f $CONTAINER_NAME]"
   else
