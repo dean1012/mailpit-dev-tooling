@@ -8,3 +8,13 @@ config.env
 
 # Logs
 *.log
+
+# Python test caches
+__pycache__/
+*.py[cod]
+
+# Coverage artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
