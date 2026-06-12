@@ -123,4 +123,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development and validation notes.
 
 ## License
 
-MIT
+[MIT](LICENSE)
