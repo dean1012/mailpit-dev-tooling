@@ -14,9 +14,9 @@ Run the same validation commands used by CI:
 ```bash
 python3 -m unittest discover -s tests -v
 shellcheck mailpitctl
-yamllint .
+git ls-files '*.yml' '*.yaml' | xargs -r yamllint
 docker compose config
-markdownlint-cli2 .
+git ls-files '*.md' | xargs -r markdownlint-cli2
 ```
 
 The unit test suite measures `mailpitctl` shell line coverage with a Bash
