@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
 
       - name: Run actionlint
-        uses: devops-actions/actionlint@2e68a47f3cd2b36da50cd4ce259eb3db11d72c80  # v0.1.12
+        uses: devops-actions/actionlint@887b1049686e2e2d63d82b8d56b09c5d0807222e  # v0.1.12
 
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@00b27aa7cb85167568cb48a3838b75f4265f2bca  # master
