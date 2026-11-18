@@ -7,12 +7,19 @@ Thank you for your interest in improving `mailpit-dev-tooling`.
 See [README.md](README.md) for installation, configuration, and local Mailpit
 usage.
 
+Install the workflow linter:
+
+```bash
+python3 -m pip install actionlint-py==1.7.12.24
+```
+
 ## Validation
 
 Run the same validation commands used by CI:
 
 ```bash
 python3 -m unittest discover -s tests -v
+actionlint
 shellcheck mailpitctl
 git ls-files '*.yml' '*.yaml' | xargs -r yamllint
 docker compose config

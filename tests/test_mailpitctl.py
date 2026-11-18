@@ -349,17 +349,19 @@ class MailpitctlTestCase(unittest.TestCase):
         self.assertEqual(self.docker_calls(), [])
 
     def test_requires_docker_cli(self) -> None:
-        bash_only = self.workdir / "bash-only"
-        bash_only.mkdir()
-        bash_path = shutil.which("bash")
-        if bash_path is None:
-            raise AssertionError("bash is required to run mailpitctl tests")
-        os.symlink(bash_path, bash_only / "bash")
+        without_docker = self.workdir / "without-docker"
+        without_docker.mkdir()
+        for command in ("bash", "basename", "dirname"):
+            command_path = shutil.which(command)
+            if command_path is None:
+                raise AssertionError(f"{command} is required to run mailpitctl tests")
+            os.symlink(command_path, without_docker / command)
 
-        result = self.run_ctl("status", path=str(bash_only))
+        result = self.run_ctl("status", path=str(without_docker))
 
         self.assert_failure(result)
         self.assertIn("Docker CLI is not installed", result.stderr)
+        self.assertNotIn("command not found", result.stderr)
 
     def test_requires_docker_daemon(self) -> None:
         self.write_state(info_ok=False)
